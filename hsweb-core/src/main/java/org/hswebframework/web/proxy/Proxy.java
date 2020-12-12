@@ -1,13 +1,30 @@
 package org.hswebframework.web.proxy;
 
-import javassist.*;
+import javassist.ClassClassPath;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtField;
+import javassist.CtNewConstructor;
+import javassist.CtNewMethod;
+import javassist.LoaderClassPath;
 import javassist.bytecode.AnnotationsAttribute;
 import javassist.bytecode.ConstPool;
+import javassist.bytecode.annotation.Annotation;
+import javassist.bytecode.annotation.ArrayMemberValue;
+import javassist.bytecode.annotation.BooleanMemberValue;
+import javassist.bytecode.annotation.ClassMemberValue;
+import javassist.bytecode.annotation.IntegerMemberValue;
+import javassist.bytecode.annotation.LongMemberValue;
+import javassist.bytecode.annotation.MemberValue;
+import javassist.bytecode.annotation.StringMemberValue;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.springframework.util.ClassUtils;
 
+import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * @author zhouhao
@@ -16,13 +33,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Proxy<I> {
     private static final AtomicLong counter = new AtomicLong(1);
 
-    private CtClass  ctClass;
+    private final CtClass ctClass;
     @Getter
-    private Class<I> superClass;
+    private final Class<I> superClass;
     @Getter
-    private String   className;
+    private final String className;
     @Getter
-    private String   classFullName;
+    private final String classFullName;
 
     private Class<I> targetClass;
 
@@ -37,11 +54,10 @@ public class Proxy<I> {
             throw new NullPointerException("superClass can not be null");
         }
         this.superClass = superClass;
-        ClassPool classPool = new ClassPool(true);
+        ClassPool classPool = ClassPool.getDefault();
 
-        ClassPath classPath = new ClassClassPath(this.getClass());
-        classPool.insertClassPath(classPath);
-
+        classPool.insertClassPath(new ClassClassPath(this.getClass()));
+        classPool.insertClassPath(new LoaderClassPath(ClassUtils.getDefaultClassLoader()));
         if (classPathString != null) {
             for (String path : classPathString) {
                 classPool.insertClassPath(path);
@@ -51,7 +67,6 @@ public class Proxy<I> {
         classFullName = superClass.getPackage() + "." + className;
 
         ctClass = classPool.makeClass(classFullName);
-
         if (superClass != Object.class) {
             if (superClass.isInterface()) {
                 ctClass.setInterfaces(new CtClass[]{classPool.get(superClass.getName())});
@@ -74,16 +89,57 @@ public class Proxy<I> {
         return addField(code, null);
     }
 
+    public Proxy<I> addField(String code, Class<? extends java.lang.annotation.Annotation> annotation) {
+        return addField(code, annotation, null);
+    }
+
+    @SuppressWarnings("all")
+    public static MemberValue createMemberValue(Object value, ConstPool constPool) {
+        MemberValue memberValue = null;
+        if (value instanceof Integer) {
+            memberValue = new IntegerMemberValue(constPool, ((Integer) value));
+        } else if (value instanceof Boolean) {
+            memberValue = new BooleanMemberValue((Boolean) value, constPool);
+        } else if (value instanceof Long) {
+            memberValue = new LongMemberValue((Long) value, constPool);
+        } else if (value instanceof String) {
+            memberValue = new StringMemberValue((String) value, constPool);
+        } else if (value instanceof Class) {
+            memberValue = new ClassMemberValue(((Class) value).getName(), constPool);
+        } else if (value instanceof Object[]) {
+            Object[] arr = ((Object[]) value);
+            ArrayMemberValue arrayMemberValue = new ArrayMemberValue(new ClassMemberValue(arr[0].getClass().getName(), constPool), constPool);
+            arrayMemberValue.setValue(Arrays.stream(arr)
+                    .map(o -> createMemberValue(o, constPool))
+                    .toArray(MemberValue[]::new));
+            memberValue = arrayMemberValue;
+
+        }
+        return memberValue;
+    }
+
+    public Proxy<I> custom(Consumer<CtClass> ctClassConsumer) {
+        ctClassConsumer.accept(ctClass);
+        return this;
+    }
+
     @SneakyThrows
-    public Proxy<I> addField(String code, String annotation) {
+    public Proxy<I> addField(String code, Class<? extends java.lang.annotation.Annotation> annotation, Map<String, Object> annotationProperties) {
         return handleException(() -> {
             CtField ctField = CtField.make(code, ctClass);
             if (null != annotation) {
                 ConstPool constPool = ctClass.getClassFile().getConstPool();
-                AnnotationsAttribute attributeInfo =
-                        new AnnotationsAttribute(constPool, AnnotationsAttribute.visibleTag);
-                attributeInfo.addAnnotation(
-                        new javassist.bytecode.annotation.Annotation(annotation, constPool));
+                AnnotationsAttribute attributeInfo = new AnnotationsAttribute(constPool, AnnotationsAttribute.visibleTag);
+                Annotation ann = new javassist.bytecode.annotation.Annotation(annotation.getName(), constPool);
+                if (null != annotationProperties) {
+                    annotationProperties.forEach((key, value) -> {
+                        MemberValue memberValue = createMemberValue(value, constPool);
+                        if (memberValue != null) {
+                            ann.addMemberValue(key, memberValue);
+                        }
+                    });
+                }
+                attributeInfo.addAnnotation(ann);
                 ctField.getFieldInfo().addAttribute(attributeInfo);
             }
             ctClass.addField(ctField);

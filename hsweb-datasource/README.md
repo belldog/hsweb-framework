@@ -5,6 +5,22 @@
 
 # example
 
+表达式方式:
+
+application.yml配置
+```xml
+hsweb:
+    datasource:
+        switcher:
+           test: # 只是一个标识
+              # 拦截类和方法的表达式
+              expression: org.hswebframework.**.*Service.find*
+              # 切换数据源
+              data-source-id: read_db
+              # 切换数据库 从3.0.8开始支持
+              #database: db_001  # select * from db_001.s_user
+```
+
 编程方式:
 ```java
   //切换到 id为mysql_read_01的数据源

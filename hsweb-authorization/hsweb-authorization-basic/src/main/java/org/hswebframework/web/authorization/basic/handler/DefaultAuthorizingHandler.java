@@ -1,6 +1,7 @@
 package org.hswebframework.web.authorization.basic.handler;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.expands.script.engine.DynamicScriptEngine;
 import org.hswebframework.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.web.authorization.Authentication;
@@ -54,7 +55,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
 
     @Override
     public void handRBAC(AuthorizingContext context) {
-        if(handleEvent(context,HandleType.RBAC)){
+        if (handleEvent(context, HandleType.RBAC)) {
             return;
         }
         //进行rdac权限控制
@@ -63,8 +64,9 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         handleExpression(context.getAuthentication(), context.getDefinition(), context.getParamContext());
 
     }
-    private boolean handleEvent(AuthorizingContext context,HandleType type){
-        if(null!=eventPublisher) {
+
+    private boolean handleEvent(AuthorizingContext context, HandleType type) {
+        if (null != eventPublisher) {
             AuthorizingHandleBeforeEvent event = new AuthorizingHandleBeforeEvent(context, type);
             eventPublisher.publishEvent(event);
             if (!event.isExecute()) {
@@ -77,16 +79,17 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         }
         return false;
     }
+
     public void handleDataAccess(AuthorizingContext context) {
 
         if (dataAccessController == null) {
             logger.warn("dataAccessController is null,skip result access control!");
             return;
         }
-        if(context.getDefinition().getDataAccessDefinition()==null){
+        if (context.getDefinition().getDataAccessDefinition() == null) {
             return;
         }
-        if(handleEvent(context,HandleType.DATA)){
+        if (handleEvent(context, HandleType.DATA)) {
             return;
         }
 
@@ -152,17 +155,15 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         Set<String> actionsDef = definition.getActions();
         Set<String> rolesDef = definition.getRoles();
         Set<String> usersDef = definition.getUser();
-
+        boolean anyHandled = false;
 
         // 控制权限
-        if (!definition.getPermissions().isEmpty()) {
+        if (!permissionsDef.isEmpty()) {
+            anyHandled = true;
             if (logger.isInfoEnabled()) {
-                logger.info("do permission access handle : permissions{}({}),actions{} ,definition:{}.{} ({})",
-                        definition.getPermissionDescription(),
-                        permissionsDef, actionsDef
-                        ,definition.getPermissions(),
-                        definition.getActions(),
-                        definition.getLogical());
+                logger.info("执行权限控制:权限{},操作{}.",
+                        permissionsDef,
+                        actionsDef);
             }
             List<Permission> permissions = authentication.getPermissions().stream()
                     .filter(permission -> {
@@ -188,29 +189,47 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
                         return logicalIsOr || permission.getActions().containsAll(actions);
                     }).collect(Collectors.toList());
             access = logicalIsOr ?
-                    permissions.size() > 0 :
+                    CollectionUtils.isNotEmpty(permissions) :
                     //权限数量和配置的数量相同
                     permissions.size() == permissionsDef.size();
         }
         //控制角色
         if (!rolesDef.isEmpty()) {
-            if (logger.isInfoEnabled()) {
-                logger.info("do role access handle : roles{} , definition:{}", rolesDef,definition.getRoles());
+
+            Set<String> roleIds = authentication.getRoles().stream().map(Role::getId).collect(Collectors.toSet());
+
+            Function<Predicate<String>, Boolean> func = logicalIsOr
+                    ? roleIds.stream()::anyMatch
+                    : roleIds.stream()::allMatch;
+            if (anyHandled) {
+                access = logicalIsOr
+                        ? access || func.apply(rolesDef::contains)
+                        : access && func.apply(rolesDef::contains);
+            } else {
+                access = func.apply(rolesDef::contains);
             }
-            Function<Predicate<Role>, Boolean> func = logicalIsOr
-                    ? authentication.getRoles().stream()::anyMatch
-                    : authentication.getRoles().stream()::allMatch;
-            access = func.apply(role -> rolesDef.contains(role.getId()));
+
+            if (logger.isInfoEnabled()) {
+                logger.info("执行角色权限控制{},当前角色:{},限制角色:{}.", access ? "通过" : "拒绝", roleIds, rolesDef);
+            }
+            anyHandled = true;
         }
         //控制用户
         if (!usersDef.isEmpty()) {
-            if (logger.isInfoEnabled()) {
-                logger.info("do user access handle : users{} , definition:{} ", usersDef,definition.getUser());
-            }
+            String username = authentication.getUser().getUsername();
             Function<Predicate<String>, Boolean> func = logicalIsOr
                     ? usersDef.stream()::anyMatch
                     : usersDef.stream()::allMatch;
-            access = func.apply(authentication.getUser().getUsername()::equals);
+            if (anyHandled) {
+                access = logicalIsOr
+                        ? access || func.apply(username::equals)
+                        : access && func.apply(username::equals);
+            } else {
+                access = func.apply(username::equals);
+            }
+            if (logger.isInfoEnabled()) {
+                logger.info("执行用户权限控制{},当前用户:{},限制用户:{}.", access ? "通过" : "拒绝", username, usersDef);
+            }
         }
         if (!access) {
             throw new AccessDenyException(definition.getMessage());

@@ -23,3 +23,5 @@ spring:
         ddl-auto: update
 mybatis:
   mapper-locations: org/hswebframework/web/dao/test/*.xml
+  dynamic-datasource: true
+#  type-aliases-package: org.hswebframework.web.dao.crud.DataType

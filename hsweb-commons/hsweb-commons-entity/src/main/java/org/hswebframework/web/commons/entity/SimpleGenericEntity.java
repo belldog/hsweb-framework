@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2020 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@ public abstract class SimpleGenericEntity<PK> implements GenericEntity<PK> {
     private PK id;
 
     private Map<String, Object> properties;
+
+    @Override
+    public String toString() {
+        return toString((String[]) null);
+    }
 
     @Override
     public PK getId() {

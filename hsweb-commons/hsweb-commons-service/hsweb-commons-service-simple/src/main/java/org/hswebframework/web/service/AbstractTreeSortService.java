@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 http://www.hswebframework.org
+ * Copyright 2020 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,18 +41,40 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
 
     @Override
     @Transactional(readOnly = true)
+    public List<E> selectParentNode(PK childId) {
+        assertNotNull(childId);
+        E old = selectByPk(childId);
+        if (null == old) {
+            return new ArrayList<>();
+        }
+        return createQuery()
+                .where()
+                // where ? like concat(path,'%')
+                .and("path$like$reverse$startWith", old.getPath())
+                .listNoPaging();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<E> selectAllChildNode(PK parentId) {
         assertNotNull(parentId);
         E old = selectByPk(parentId);
-        assertNotNull(old);
-        return createQuery().where().like$(TreeSupportEntity.path, old.getPath()).noPaging().list();
+        if (null == old) {
+            return new ArrayList<>();
+        }
+        return createQuery()
+                .where()
+                .like$(TreeSupportEntity.path, old.getPath())
+                .listNoPaging();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<E> selectChildNode(PK parentId) {
         assertNotNull(parentId);
-        return createQuery().where(TreeSupportEntity.parentId, parentId).noPaging().list();
+        return createQuery()
+                .where(TreeSupportEntity.parentId, parentId)
+                .listNoPaging();
     }
 
     //当父节点不存在时,创建parentId
@@ -65,8 +88,11 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
 
     protected void applyPath(E entity) {
         if (StringUtils.isEmpty(entity.getParentId())) {
-            entity.setSortIndex(0L);
+            if (entity.getSortIndex() == null) {
+                entity.setSortIndex(0L);
+            }
             entity.setParentId(createParentIdOnExists());
+            entity.setLevel(0);
             entity.setPath(RandomUtil.randomChar(4));
             return;
         }
@@ -76,27 +102,29 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
 
         TreeSortSupportEntity<PK> parent = selectByPk(entity.getParentId());
         if (null == parent) {
-            if (entity.getSortIndex() == null)
+            if (entity.getSortIndex() == null) {
                 entity.setSortIndex(0L);
+            }
             entity.setParentId(createParentIdOnExists());
             entity.setPath(RandomUtil.randomChar(4));
+            entity.setLevel(0);
         } else {
-            if (entity.getSortIndex() == null&&parent.getSortIndex()!=null)
+            if (entity.getSortIndex() == null && parent.getSortIndex() != null) {
                 entity.setSortIndex(parent.getSortIndex() * 10);
+            }
             entity.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
+            entity.setLevel(entity.getPath().split("[-]").length);
         }
     }
 
     @Override
     public PK insert(E entity) {
-        if (entity.getId() == null) {
+        if (StringUtils.isEmpty(entity.getId())) {
             entity.setId(getIDGenerator().generate());
         }
         applyPath(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        super.insert(entity);
-//        childrenList.remove(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return entity.getId();
     }
@@ -111,7 +139,9 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
     @Override
     public int updateBatch(Collection<E> data) {
         assertNotNull(data);
-        return data.stream().map(this::updateByPk).reduce(Math::addExact).orElse(0);
+        return data.stream()
+                .mapToInt(this::updateByPk)
+                .sum();
     }
 
     @Override
@@ -119,17 +149,15 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         assertNotNull(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        this.saveOrUpdateForSingle(entity);
-//        childrenList.remove(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return childrenList.size() + 1;
     }
 
-    public PK saveOrUpdateForSingle(E entity) {
+    protected PK saveOrUpdateForSingle(E entity) {
         assertNotNull(entity);
         PK id = entity.getId();
-        if (null == id || this.selectByPk(id) == null) {
-            if (null == id) {
+        if (StringUtils.isEmpty(id) || this.selectByPk(id) == null) {
+            if (StringUtils.isEmpty(id)) {
                 entity.setId(getIDGenerator().generate());
             }
             applyPath(entity);
@@ -140,12 +168,17 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
     }
 
     @Override
-    public int deleteByPk(PK id) {
+    public E deleteByPk(PK id) {
         E old = selectByPk(id);
         assertNotNull(old);
-        return DefaultDSLDeleteService.createDelete(getDao())
-                // where path like 'path%'
-                .where().like$(TreeSupportEntity.path, old.getPath())
-                .exec();
+        if (StringUtils.isEmpty(old.getPath())) {
+            getDao().deleteByPk(id);
+        } else {
+            DefaultDSLDeleteService.createDelete(getDao())
+                    // where path like 'path%'
+                    .where().like$(TreeSupportEntity.path, old.getPath())
+                    .exec();
+        }
+        return old;
     }
 }

@@ -1,12 +1,7 @@
 package org.hswebframework.web.authorization;
 
-import com.alibaba.fastjson.JSON;
-import org.hswebframework.web.authorization.access.DataAccessConfig;
-import org.hswebframework.web.authorization.access.FieldFilterDataAccessConfig;
-import org.hswebframework.web.authorization.access.ScopeDataAccessConfig;
 import org.hswebframework.web.authorization.builder.AuthenticationBuilder;
 import org.hswebframework.web.authorization.exception.UnAuthorizedException;
-import org.hswebframework.web.authorization.simple.SimpleFiledScopeDataAccessConfig;
 import org.hswebframework.web.authorization.simple.builder.SimpleAuthenticationBuilder;
 import org.hswebframework.web.authorization.simple.builder.SimpleDataAccessConfigBuilderFactory;
 import org.hswebframework.web.authorization.token.*;
@@ -14,12 +9,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
-import static org.hswebframework.web.authorization.Permission.scope;
 import static org.junit.Assert.*;
 
 public class AuthenticationTests {
@@ -64,6 +56,24 @@ public class AuthenticationTests {
         assertTrue(authentication.hasPermission("user-manager", "get"));
         assertTrue(!authentication.hasPermission("user-manager", "delete"));
 
+        boolean has = AuthenticationPredicate.has("permission:user-manager")
+                .or(AuthenticationPredicate.role("admin-role"))
+                .test(authentication);
+
+        Assert.assertTrue(has);
+        has = AuthenticationPredicate.has("permission:user-manager:test")
+                .and(AuthenticationPredicate.role("admin-role"))
+                .test(authentication);
+        Assert.assertFalse(has);
+
+        has = AuthenticationPredicate.has("permission:user-manager:get and role:admin-role")
+                .test(authentication);
+        Assert.assertTrue(has);
+
+        has = AuthenticationPredicate.has("permission:user-manager:test or role:admin-role")
+                .test(authentication);
+        Assert.assertTrue(has);
+
         //获取数据权限配置
         Set<String> fields = authentication.getPermission("user-manager")
                 .map(permission -> permission.findDenyFields(Permission.ACTION_QUERY))
@@ -84,6 +94,11 @@ public class AuthenticationTests {
 
         //初始化权限管理器,用于获取用户的权限信息
         AuthenticationManager authenticationManager = new AuthenticationManager() {
+            @Override
+            public Authentication authenticate(AuthenticationRequest request) {
+                return null;
+            }
+
             @Override
             public Authentication getByUserId(String userId) {
                 if (userId.equals("admin")) {

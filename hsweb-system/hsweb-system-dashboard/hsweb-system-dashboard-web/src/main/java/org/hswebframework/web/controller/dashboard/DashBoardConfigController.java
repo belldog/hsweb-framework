@@ -12,10 +12,7 @@ import org.hswebframework.web.dashboard.DashBoardService;
 import org.hswebframework.web.dashboard.executor.DashBoardExecutor;
 import org.hswebframework.web.service.CrudService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/dashboard")
@@ -35,8 +32,20 @@ public class DashBoardConfigController implements SimpleGenericEntityController<
     }
 
 
+    @Override
+    public ResponseMessage<String> add(@RequestBody DashBoardConfigEntity data) {
+        Authentication.current().ifPresent(a -> data.setCreatorId(a.getUser().getId()));
+        return SimpleGenericEntityController.super.add(data);
+    }
+
+    @Override
+    public ResponseMessage<String> saveOrUpdate(@RequestBody DashBoardConfigEntity data) {
+        Authentication.current().ifPresent(a -> data.setCreatorId(a.getUser().getId()));
+        return SimpleGenericEntityController.super.saveOrUpdate(data);
+    }
+
     @GetMapping("{id}/execute")
-    @Authorize
+    @Authorize(merge = false)
     @ApiOperation("执行仪表盘配置")
     public ResponseMessage<Object> execute(@PathVariable String id) {
         return ResponseMessage.ok(dashBoardExecutor.execute(dashBoardService.selectByPk(id), Authentication.current().orElse(null)));

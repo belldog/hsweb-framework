@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 http://www.hswebframework.org
+ * Copyright 2020 http://www.hswebframework.org
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,14 @@
 
 package org.hswebframework.web.authorization;
 
+import lombok.NonNull;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.access.FieldFilterDataAccessConfig;
 import org.hswebframework.web.authorization.access.ScopeDataAccessConfig;
 
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -83,6 +85,8 @@ public interface Permission extends Serializable {
      */
     String getId();
 
+    String getName();
+
     /**
      * 用户对此权限的可操作事件(按钮)
      * <p>
@@ -140,7 +144,7 @@ public interface Permission extends Serializable {
      */
     default Set<String> findDenyFields(String action) {
         return findFieldFilter(action)
-                .filter(conf -> conf.getType().equals(DENY_FIELDS))
+                .filter(conf -> DENY_FIELDS.equals(conf.getType()))
                 .map(FieldFilterDataAccessConfig::getFields)
                 .orElseGet(Collections::emptySet);
     }
@@ -173,11 +177,15 @@ public interface Permission extends Serializable {
      * @return {@link DataAccessPredicate}
      */
     static Permission.DataAccessPredicate<ScopeDataAccessConfig> scope(String action, String type, String scopeType) {
+        Objects.requireNonNull(action, "action can not be null");
+        Objects.requireNonNull(type, "type can not be null");
+        Objects.requireNonNull(scopeType, "scopeType can not be null");
+
         return config ->
                 config instanceof ScopeDataAccessConfig
-                        && config.getAction().equals(action)
-                        && config.getType().equals(type)
-                        && ((ScopeDataAccessConfig) config).getScopeType().equals(scopeType);
+                        && action.equals(config.getAction())
+                        && type.equals(config.getType())
+                        && scopeType.equals(((ScopeDataAccessConfig) config).getScopeType());
     }
 
 

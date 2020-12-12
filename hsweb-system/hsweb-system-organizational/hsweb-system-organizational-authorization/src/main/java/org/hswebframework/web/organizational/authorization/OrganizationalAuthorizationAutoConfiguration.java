@@ -65,6 +65,18 @@ public class OrganizationalAuthorizationAutoConfiguration implements BeanPostPro
         return new CustomScopeDataAccessConfigConvert();
     }
 
+    @Bean
+    @ConditionalOnMissingBean(ScopeByUserDataAccessConfigConvert.class)
+    public ScopeByUserDataAccessConfigConvert scopeByUserDataAccessConfigConvert() {
+        return new ScopeByUserDataAccessConfigConvert();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(ScopeByUserHandler.class)
+    public ScopeByUserHandler scopeByUserHandler() {
+        return new ScopeByUserHandler();
+    }
+
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
         return bean;
@@ -72,8 +84,8 @@ public class OrganizationalAuthorizationAutoConfiguration implements BeanPostPro
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-        if (bean instanceof PersonnelAuthorizationSupplier) {
-            PersonnelAuthorizationHolder.addSupplier(((PersonnelAuthorizationSupplier) bean));
+        if (bean instanceof PersonnelAuthenticationSupplier) {
+            PersonnelAuthenticationHolder.addSupplier(((PersonnelAuthenticationSupplier) bean));
         }
         return bean;
     }
@@ -84,17 +96,17 @@ public class OrganizationalAuthorizationAutoConfiguration implements BeanPostPro
     }
 
     @Configuration
-    @ConditionalOnBean(PersonnelAuthorizationManager.class)
+    @ConditionalOnBean(PersonnelAuthenticationManager.class)
     public static class PersonnelAuthorizationSupplierAutoConfiguration {
 
         @Bean
-        public DefaultPersonnelAuthorizationSupplier personnelAuthorizationManager(PersonnelAuthorizationManager personnelAuthorizationManager) {
-            return new DefaultPersonnelAuthorizationSupplier(personnelAuthorizationManager);
+        public DefaultPersonnelAuthenticationSupplier personnelAuthorizationManager(PersonnelAuthenticationManager personnelAuthenticationManager) {
+            return new DefaultPersonnelAuthenticationSupplier(personnelAuthenticationManager);
         }
 
         @Bean
-        public PersonnelAuthorizationSettingTypeSupplier personnelAuthorizationSettingTypeSupplier() {
-            return new PersonnelAuthorizationSettingTypeSupplier();
+        public PersonnelAuthenticationSettingTypeSupplier personnelAuthorizationSettingTypeSupplier() {
+            return new PersonnelAuthenticationSettingTypeSupplier();
         }
     }
 }

@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2020 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ package org.hswebframework.web.validate;
 
 import org.hswebframework.web.BusinessException;
 
+import java.util.Collections;
 import java.util.List;
 
 public class ValidationException extends BusinessException {
@@ -37,13 +38,13 @@ public class ValidationException extends BusinessException {
     }
 
     public ValidationException(ValidateResults results) {
-        super(results.toString(), 400);
+        super(results.getResults().get(0).getMessage(), 400);
         this.results = results;
     }
 
     public List<ValidateResults.Result> getResults() {
         if (results == null) {
-            return null;
+            return new java.util.ArrayList<>();
         }
         return results.getResults();
     }

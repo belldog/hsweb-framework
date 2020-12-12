@@ -83,10 +83,10 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
         JSONArray jsonArray = JSON.parseArray(permissionJson);
         List<Permission> permissions = new ArrayList<>();
         for (int i = 0; i < jsonArray.size(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(0);
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
             SimplePermission permission = new SimplePermission();
             permission.setId(jsonObject.getString("id"));
-
+            permission.setName(jsonObject.getString("name"));
             JSONArray actions = jsonObject.getJSONArray("actions");
             if (actions != null) {
                 permission.setActions(new HashSet<>(actions.toJavaList(String.class)));
